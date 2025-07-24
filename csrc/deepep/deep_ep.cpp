@@ -45,8 +45,7 @@ std::tuple<at::Tensor, std::optional<at::Tensor>, at::Tensor, at::Tensor, at::Te
     std::optional<std::function<void()>>>
     Buffer::low_latency_dispatch(const at::Tensor &x, const at::Tensor &topk_idx,
         const std::optional<at::Tensor> &cumulative_local_expert_recv_stats, int64_t num_max_dispatch_tokens_per_rank,
-        int64_t num_experts, bool use_fp8, bool round_scale, bool use_ue8m0, bool async, bool return_recv_hook,
-        int64_t sharedExpertRankNum)
+        int64_t num_experts, bool use_fp8, bool round_scale, bool use_ue8m0, bool async, bool return_recv_hook)
 {
     this->is_padding = false;
     EP_HOST_ASSERT(low_latency_mode);
@@ -84,6 +83,7 @@ std::tuple<at::Tensor, std::optional<at::Tensor>, at::Tensor, at::Tensor, at::Te
     int64_t sharedExpertNum = 1;
     int64_t expertTokenNumsType = 1;
     int64_t globalBS = num_max_dispatch_tokens_per_rank * num_ranks;
+    int64_t sharedExpertRankNum = 0;
 
     // get ep & tp name
     char hcomEpName[128];
@@ -127,10 +127,6 @@ std::tuple<at::Tensor, std::optional<at::Tensor>, at::Tensor, at::Tensor, at::Te
     return {packed_recv_x, packed_recv_x_scales, packed_recv_count, expandIdx, expertTokenNumsOut, event, std::function<void()>([]{})};
 }
 
-bool is_sm90_compiled() {
-    return true;
-}
-
 int Buffer::get_rdma_rank() const {
     return rdma_rank;
 }
@@ -139,7 +135,7 @@ std::tuple<at::Tensor, std::optional<EventHandle>, std::optional<std::function<v
     const at::Tensor &x, const at::Tensor &topk_idx, const at::Tensor &topk_weights, const at::Tensor &src_info,
     const at::Tensor &layout_range, int64_t num_max_dispatch_tokens_per_rank, int64_t num_experts,
     const at::Tensor &ep_send_count, bool zero_copy, bool async, bool return_recv_hook,
-    const std::optional<at::Tensor> &out, int64_t shared_expert_rank_num)
+    const std::optional<at::Tensor> &out)
 {
     at::Tensor new_idx = topk_idx;
     at::Tensor new_scales = topk_weights;
@@ -174,6 +170,7 @@ std::tuple<at::Tensor, std::optional<EventHandle>, std::optional<std::function<v
     int64_t expertSharedType = 0;
     int64_t shared_expert_num = 1;
     int64_t globalBS = num_max_dispatch_tokens_per_rank * num_ranks;
+    int64_t sharedExpertRankNum = 0;
     int64_t outDtype = 0;
     int64_t commQuantMode = 0;
     int64_t groupListType = 0;
@@ -204,7 +201,7 @@ std::tuple<at::Tensor, std::optional<EventHandle>, std::optional<std::function<v
         tpRankId,
         expertSharedType,
         shared_expert_num,
-        shared_expert_rank_num,
+        sharedExpertRankNum,
         globalBS,
         outDtype,
         commQuantMode,
@@ -217,28 +214,3 @@ std::tuple<at::Tensor, std::optional<EventHandle>, std::optional<std::function<v
 }
 
 } // namespace deep_ep
-
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-
-    pybind11::class_<deep_ep::Config>(m, "Config")
-        .def(pybind11::init<int, int, int, int, int>(),
-             py::arg("num_sms") = 20,
-             py::arg("num_max_nvl_chunked_send_tokens") = 6, py::arg("num_max_nvl_chunked_recv_tokens") = 256,
-             py::arg("num_max_rdma_chunked_send_tokens") = 6, py::arg("num_max_rdma_chunked_recv_tokens") = 256)
-        .def("get_nvl_buffer_size_hint", &deep_ep::Config::get_nvl_buffer_size_hint)
-        .def("get_rdma_buffer_size_hint", &deep_ep::Config::get_rdma_buffer_size_hint);
-    m.def("get_low_latency_rdma_size_hint", &deep_ep::get_low_latency_rdma_size_hint);
-
-    pybind11::class_<deep_ep::EventHandle>(m, "EventHandle")
-        .def(pybind11::init<>())
-        .def("current_stream_wait", &deep_ep::EventHandle::current_stream_wait);
-
-    pybind11::class_<deep_ep::Buffer>(m, "Buffer")
-        .def(pybind11::init<int, int, int64_t, int64_t, bool, std::string>())
-        .def("is_available", &deep_ep::Buffer::is_available)
-        .def("get_rdma_rank", &deep_ep::Buffer::get_rdma_rank)
-        .def("low_latency_dispatch", &deep_ep::Buffer::low_latency_dispatch)
-        .def("low_latency_combine", &deep_ep::Buffer::low_latency_combine);
-
-    m.def("is_sm90_compiled", deep_ep::is_sm90_compiled);
-}
