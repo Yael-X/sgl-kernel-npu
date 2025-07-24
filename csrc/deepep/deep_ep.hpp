@@ -28,7 +28,6 @@ struct Buffer {
     at::Tensor ori_x;
     at::Tensor new_topk_idx;
     at::Tensor new_scales;
-    at::Tensor padding_x = 
 
 private:
     std::string moe_all_to_all_group_name;

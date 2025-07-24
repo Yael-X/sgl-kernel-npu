@@ -43,9 +43,13 @@ function make_package()
         pip3 install wheel
     fi
 
-    cp -v ${OUTPUT_DIR}/lib/* "$CURRENT_DIR"/deep_ep/
-    rm -rf "$CURRENT_DIR"/dist
+    PYTHON_DIR="python"
+    cd "$PYTHON_DIR" || exit
+
+    cp -v ${OUTPUT_DIR}/lib/* "$CURRENT_DIR"/python/deep_ep/
+    rm -rf "$CURRENT_DIR"/python/dist
     python3 setup.py build
+    cd -
 }
 
 function build_kernels()

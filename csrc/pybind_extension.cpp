@@ -1,5 +1,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/pytypes.h>
+#include <pybind11/functional.h>
 
 #include "deepep/deep_ep.hpp"
 #include "deepep/config.hpp"
@@ -9,6 +10,7 @@
 #define TORCH_EXTENSION_NAME deep_ep_cpp
 #endif
 
+namespace py = pybind11;
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 
@@ -31,6 +33,4 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         .def("get_rdma_rank", &deep_ep::Buffer::get_rdma_rank)
         .def("low_latency_dispatch", &deep_ep::Buffer::low_latency_dispatch)
         .def("low_latency_combine", &deep_ep::Buffer::low_latency_combine);
-
-    m.def("is_sm90_compiled", deep_ep::is_sm90_compiled);
 }

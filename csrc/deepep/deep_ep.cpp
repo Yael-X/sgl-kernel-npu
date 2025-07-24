@@ -127,10 +127,6 @@ std::tuple<at::Tensor, std::optional<at::Tensor>, at::Tensor, at::Tensor, at::Te
     return {packed_recv_x, packed_recv_x_scales, packed_recv_count, expandIdx, expertTokenNumsOut, event, std::function<void()>([]{})};
 }
 
-bool is_sm90_compiled() {
-    return true;
-}
-
 int Buffer::get_rdma_rank() const {
     return rdma_rank;
 }
