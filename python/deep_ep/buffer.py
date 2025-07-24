@@ -55,7 +55,7 @@ class Buffer:
                              num_max_dispatch_tokens_per_rank: int, num_experts: int,
                              cumulative_local_expert_recv_stats: Optional[torch.Tensor] = None,
                              use_fp8: bool = True, round_scale: bool = False, use_ue8m0: bool = False,
-                             async_finish: bool = False, return_recv_hook: bool = False, shared_expert_rank_num: int = 0) -> \
+                             async_finish: bool = False, return_recv_hook: bool = False) -> \
             Tuple[Tuple[torch.Tensor, torch.Tensor], torch.Tensor, Tuple, EventOverlap, Callable]:
         """
         A low-latency implementation for dispatch.
@@ -103,7 +103,7 @@ class Buffer:
                                               cumulative_local_expert_recv_stats,
                                               num_max_dispatch_tokens_per_rank, num_experts,
                                               use_fp8, round_scale, use_ue8m0,
-                                              async_finish, return_recv_hook, shared_expert_rank_num)
+                                              async_finish, return_recv_hook)
         handle = (packed_recv_src_info, packed_recv_layout_range, num_max_dispatch_tokens_per_rank, x.size(1), num_experts, packed_recv_count)
         tensors_to_record = (x, topk_idx,
                              packed_recv_x, packed_recv_x_scales, packed_recv_count,
@@ -114,7 +114,7 @@ class Buffer:
 
     def low_latency_combine(self, x: torch.Tensor, topk_idx: torch.Tensor, topk_weights: torch.Tensor,
                             handle: tuple, zero_copy: bool = False, async_finish: bool = False,
-                            return_recv_hook: bool = False, out: Optional[torch.Tensor] = None,shared_expert_rank_num: int = 0) -> \
+                            return_recv_hook: bool = False, out: Optional[torch.Tensor] = None) -> \
             Tuple[torch.Tensor, EventOverlap, Callable]:
         """
         A low-latency implementation for combine.
@@ -145,6 +145,6 @@ class Buffer:
         src_info, layout_range, num_max_dispatch_tokens_per_rank, hidden, num_experts, packed_recv_count = handle
         combined_x, event, hook = self.runtime.low_latency_combine(x, topk_ids, topk_weights, src_info, layout_range,
                                                                    num_max_dispatch_tokens_per_rank, num_experts, packed_recv_count,
-                                                                   zero_copy, async_finish, return_recv_hook, out, shared_expert_rank_num)
+                                                                   zero_copy, async_finish, return_recv_hook, out)
         tensors_to_record = (x, topk_idx, topk_weights, src_info, layout_range, combined_x)
         return combined_x, EventOverlap(event, tensors_to_record if async_finish else None), hook

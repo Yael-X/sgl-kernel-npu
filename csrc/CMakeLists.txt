@@ -63,13 +63,9 @@ list(APPEND CMAKE_PREFIX_PATH ${TORCH_NPU_DIR})
 message(STATUS "CMAKE_PREFIX_PATH = ${CMAKE_PREFIX_PATH}")
 message(STATUS "================")
 
-aux_source_directory(csrc/deepep SOURCES_CSRC)
-set(SOURCES_DEEPEP
-    ${SOURCES_CSRC}
-    pybind_extension.cpp
-)
+file(GLOB_RECURSE SOURCES_DEEPEP deepep/*.cpp)
 
-pybind11_add_module(deep_ep_cpp ${SOURCES_DEEPEP})
+pybind11_add_module(deep_ep_cpp pybind_extension.cpp ${SOURCES_DEEPEP})
 add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 set_target_properties(deep_ep_cpp PROPERTIES CXX_STANDARD 17)
 target_include_directories( deep_ep_cpp PRIVATE

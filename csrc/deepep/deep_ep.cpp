@@ -45,8 +45,7 @@ std::tuple<at::Tensor, std::optional<at::Tensor>, at::Tensor, at::Tensor, at::Te
     std::optional<std::function<void()>>>
     Buffer::low_latency_dispatch(const at::Tensor &x, const at::Tensor &topk_idx,
         const std::optional<at::Tensor> &cumulative_local_expert_recv_stats, int64_t num_max_dispatch_tokens_per_rank,
-        int64_t num_experts, bool use_fp8, bool round_scale, bool use_ue8m0, bool async, bool return_recv_hook,
-        int64_t sharedExpertRankNum)
+        int64_t num_experts, bool use_fp8, bool round_scale, bool use_ue8m0, bool async, bool return_recv_hook)
 {
     this->is_padding = false;
     EP_HOST_ASSERT(low_latency_mode);
@@ -84,6 +83,7 @@ std::tuple<at::Tensor, std::optional<at::Tensor>, at::Tensor, at::Tensor, at::Te
     int64_t sharedExpertNum = 1;
     int64_t expertTokenNumsType = 1;
     int64_t globalBS = num_max_dispatch_tokens_per_rank * num_ranks;
+    int64_t sharedExpertRankNum = 0;
 
     // get ep & tp name
     char hcomEpName[128];
@@ -135,7 +135,7 @@ std::tuple<at::Tensor, std::optional<EventHandle>, std::optional<std::function<v
     const at::Tensor &x, const at::Tensor &topk_idx, const at::Tensor &topk_weights, const at::Tensor &src_info,
     const at::Tensor &layout_range, int64_t num_max_dispatch_tokens_per_rank, int64_t num_experts,
     const at::Tensor &ep_send_count, bool zero_copy, bool async, bool return_recv_hook,
-    const std::optional<at::Tensor> &out, int64_t shared_expert_rank_num)
+    const std::optional<at::Tensor> &out)
 {
     at::Tensor new_idx = topk_idx;
     at::Tensor new_scales = topk_weights;
@@ -170,6 +170,7 @@ std::tuple<at::Tensor, std::optional<EventHandle>, std::optional<std::function<v
     int64_t expertSharedType = 0;
     int64_t shared_expert_num = 1;
     int64_t globalBS = num_max_dispatch_tokens_per_rank * num_ranks;
+    int64_t sharedExpertRankNum = 0;
     int64_t outDtype = 0;
     int64_t commQuantMode = 0;
     int64_t groupListType = 0;
@@ -200,7 +201,7 @@ std::tuple<at::Tensor, std::optional<EventHandle>, std::optional<std::function<v
         tpRankId,
         expertSharedType,
         shared_expert_num,
-        shared_expert_rank_num,
+        sharedExpertRankNum,
         globalBS,
         outDtype,
         commQuantMode,
