@@ -49,7 +49,8 @@ function make_deepep_package()
     cp -v ${OUTPUT_DIR}/lib/* "$CURRENT_DIR"/python/deep_ep/deep_ep/
     rm -rf "$CURRENT_DIR"/python/deep_ep/dist
     python3 setup.py bdist_wheel
-    cp -v "$CURRENT_DIR"/python/deep_ep/dist/deep_ep*.whl ${OUTPUT_DIR}/
+    mv -v "$CURRENT_DIR"/python/deep_ep/dist/deep_ep*.whl ${OUTPUT_DIR}/
+    rm -rf "$CURRENT_DIR"/python/deep_ep/dist
     cd -
 }
 
