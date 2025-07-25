@@ -1,6 +1,5 @@
 #include <memory>
 #include <pybind11/functional.h>
-#include <torch/python.h>
 
 #include "hccl/hccl.h"
 #include "exception.hpp"

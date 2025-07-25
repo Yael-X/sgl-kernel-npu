@@ -1,11 +1,10 @@
 #pragma once
 
-#include <pybind11/pybind11.h>
-#include <pybind11/pytypes.h>
 #include <torch/types.h>
+#include <torch/python.h>
 #include <tuple>
 #include <vector>
-
+#include <optional>
 #include "hccl/hccl.h"
 #include "hccl/hccl_types.h"
 
