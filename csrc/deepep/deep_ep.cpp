@@ -40,6 +40,52 @@ bool Buffer::is_available() const {
     return available;
 }
 
+std::tuple<torch::Tensor, std::optional<torch::Tensor>, torch::Tensor, torch::Tensor, std::optional<EventHandle>>
+Buffer::get_dispatch_layout(const torch::Tensor& topk_idx, int num_experts,
+                            std::optional<EventHandle>& previous_event, bool async, bool allocate_on_comm_stream) {
+    EP_HOST_ASSERT(topk_idx.dim() == 2);
+    EP_HOST_ASSERT(topk_idx.is_contiguous());
+    EP_HOST_ASSERT(num_experts > 0);
+
+    const int num_tokens = topk_idx.size(0);
+    const int num_topk = topk_idx.size(1);
+    
+    auto options = torch::TensorOptions().dtype(torch::kInt32).device(topk_idx.device());
+    torch::Tensor num_tokens_per_rank = torch::zeros({num_ranks}, options);
+    torch::Tensor num_tokens_per_expert = torch::zeros({num_experts}, options);
+    torch::Tensor is_token_in_rank = torch::zeros({num_tokens, num_ranks}, torch::kBool);
+    std::optional<torch::Tensor> num_tokens_per_rdma_rank = std::nullopt;
+    std::optional<EventHandle> output_event = std::nullopt;
+
+    auto topk_acc = topk_idx.accessor<int64_t, 2>();
+    auto expert_acc = num_tokens_per_expert.accessor<int32_t, 1>();
+    auto rank_acc = num_tokens_per_rank.accessor<int32_t, 1>();
+    auto in_rank_acc = is_token_in_rank.accessor<bool, 2>();
+
+    for (int i = 0; i < num_tokens; ++i) {
+        for (int j = 0; j < num_topk; ++j) {
+            const int64_t expert_idx = topk_acc[i][j];
+            if (expert_idx >= 0) { // 跳过无效路由
+                // 专家级统计
+                expert_acc[expert_idx]++;
+
+                // Rank 级统计（每个 Rank 管理 num_experts/num_ranks 专家）
+                const int rank_id = expert_idx / (num_experts / num_ranks);
+                rank_acc[rank_id]++;
+                in_rank_acc[i][rank_id] = true;
+            }
+        }
+    }
+
+    return std::make_tuple(
+        num_tokens_per_rank,
+        num_tokens_per_rdma_rank,
+        num_tokens_per_expert,
+        is_token_in_rank,
+        output_event
+    );
+}
+
 std::tuple<at::Tensor, std::optional<at::Tensor>, at::Tensor, at::Tensor, at::Tensor, std::optional<EventHandle>,
     std::optional<std::function<void()>>>
     Buffer::low_latency_dispatch(const at::Tensor &x, const at::Tensor &topk_idx,
