@@ -49,33 +49,42 @@ Buffer::get_dispatch_layout(const torch::Tensor& topk_idx, int num_experts,
 
     const int num_tokens = topk_idx.size(0);
     const int num_topk = topk_idx.size(1);
-    
-    auto options = torch::TensorOptions().dtype(torch::kInt32).device(topk_idx.device());
-    torch::Tensor num_tokens_per_rank = torch::zeros({num_ranks}, options);
-    torch::Tensor num_tokens_per_expert = torch::zeros({num_experts}, options);
-    torch::Tensor is_token_in_rank = torch::zeros({num_tokens, num_ranks}, torch::kBool);
+
+    auto options_cpu = torch::TensorOptions().dtype(torch::kInt32).device(torch::kCPU);
+    auto num_tokens_per_expert_cpu = torch::zeros({num_experts}, options_cpu);
+    auto num_tokens_per_rank_cpu = torch::zeros({num_ranks}, options_cpu);
+    auto is_token_in_rank_cpu = torch::zeros({num_tokens, num_ranks}, torch::kBool);
     std::optional<torch::Tensor> num_tokens_per_rdma_rank = std::nullopt;
     std::optional<EventHandle> output_event = std::nullopt;
 
-    auto topk_acc = topk_idx.accessor<int64_t, 2>();
-    auto expert_acc = num_tokens_per_expert.accessor<int32_t, 1>();
-    auto rank_acc = num_tokens_per_rank.accessor<int32_t, 1>();
-    auto in_rank_acc = is_token_in_rank.accessor<bool, 2>();
+    auto topk_cpu = topk_idx.to(torch::kCPU);
+    auto topk_acc = topk_cpu.accessor<int64_t, 2>();
+    auto expert_acc = num_tokens_per_expert_cpu.accessor<int32_t, 1>();
+    auto rank_acc = num_tokens_per_rank_cpu.accessor<int32_t, 1>();
+    auto in_rank_acc = is_token_in_rank_cpu.accessor<bool, 2>();
 
+    std::vector<std::vector<bool>> token_rank_seen(num_tokens, std::vector<bool>(num_ranks, false));
     for (int i = 0; i < num_tokens; ++i) {
         for (int j = 0; j < num_topk; ++j) {
             const int64_t expert_idx = topk_acc[i][j];
-            if (expert_idx >= 0) { // 跳过无效路由
-                // 专家级统计
-                expert_acc[expert_idx]++;
 
-                // Rank 级统计（每个 Rank 管理 num_experts/num_ranks 专家）
+            if (expert_idx >= 0) {
+                expert_acc[expert_idx]++;
+                
                 const int rank_id = expert_idx / (num_experts / num_ranks);
-                rank_acc[rank_id]++;
-                in_rank_acc[i][rank_id] = true;
+                // For each token, it should be counted only once for the rank it is involved in.
+                if (!token_rank_seen[i][rank_id]) {
+                    rank_acc[rank_id]++;
+                    in_rank_acc[i][rank_id] = true;
+                    token_rank_seen[i][rank_id] = true;
+                }
             }
         }
     }
+
+    auto num_tokens_per_expert = num_tokens_per_expert_cpu.to(topk_idx.device());
+    auto num_tokens_per_rank = num_tokens_per_rank_cpu.to(topk_idx.device());
+    auto is_token_in_rank = is_token_in_rank_cpu.to(topk_idx.device());
 
     return std::make_tuple(
         num_tokens_per_rank,
