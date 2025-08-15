@@ -379,9 +379,9 @@ static ge::graphStatus CheckAttrs(
     // 校验输入x的dim 0并设bs
     const gert::StorageShape *xStorageShape = context->GetInputShape(X_INDEX);
     const int64_t xDim0 = xStorageShape->GetStorageShape().GetDim(0);
-    OP_TILING_CHECK((xDim0 > BS_UPPER_BOUND) || (xDim0 <= 0),
+    OP_TILING_CHECK((xDim0 > BS_UPPER_BOUND) || (xDim0 < 0),
         OP_LOGE(
-            nodeName, "xDim0(BS) is invalid. Should be between [1, %ld], but got xDim0=%ld.", BS_UPPER_BOUND, xDim0),
+            nodeName, "xDim0(BS) is invalid. Should be between [0, %ld], but got xDim0=%ld.", BS_UPPER_BOUND, xDim0),
         return ge::GRAPH_FAILED);
     tilingData.moeDispatchInfo.bs = static_cast<uint32_t>(xDim0);
 
@@ -557,7 +557,6 @@ static ge::graphStatus MoeDispatchA3TilingFuncImpl(gert::TilingContext *context)
     std::string groupTp = "";
     uint32_t quantMode = NO_SCALES;
     uint32_t localMoeExpertNum = 1;
-    OP_LOGI(nodeName, "Enter MoeDispatch tiling check func.");
 
     // 获取入参属性
     OP_TILING_CHECK(GetAttrAndSetTilingData(context, nodeName, *tilingData, groupEp, groupTp) != ge::GRAPH_SUCCESS,
@@ -577,7 +576,6 @@ static ge::graphStatus MoeDispatchA3TilingFuncImpl(gert::TilingContext *context)
         return ge::GRAPH_FAILED);
 
     uint32_t epRankId = tilingData->moeDispatchInfo.epRankId;
-
     // 检查shape各维度并赋值h,k
     OP_TILING_CHECK(
         CheckTensorShape(context, nodeName, *tilingData, quantMode, static_cast<int64_t>(localMoeExpertNum)) !=
