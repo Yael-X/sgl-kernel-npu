@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-/* funtion: aclnnMoeCombineGetWorkspaceSize
+/* funtion: aclnnMoe CombineGetWorkspaceSize
  * recvX : required
  * tokenSrcInfo : required
  * epRecvCounts : required

@@ -1,4 +1,16 @@
 .vscode/
+build/
+csrc/deepep/ops/build_out/
+csrc/deepep/ops/cmake/util/__pycache__/
+output/
+python/deep_ep/build/
+python/deep_ep/deep_ep.egg-info/
+python/deep_ep/deep_ep/vendors/
+tests/python/deepep/__pycache__/
+tests/python/deepep/extra-info/
+tests/python/deepep/fusion_result.json
+tests/python/deepep/kernel_meta/
+fusion_result.json
 # Prerequisites
 *.d
 

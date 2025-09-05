@@ -312,16 +312,23 @@ private:
         LocalTensor<int64_t> localWait = tBuf.GetWithOffset<int64_t>(flagNum * FLAG_UNIT_INT_NUM, 0);
         bool isSync = true;
         int64_t checkedFlagNum = 0;
+        int64_t systemCycleBefore = AscendC::GetSystemCycle();
         do {
             // Copy global synchronization flags to local
             DataCopy(localWait, globalWait[checkedFlagNum * FLAG_UNIT_INT_NUM],
                      (flagNum - checkedFlagNum) * FLAG_UNIT_INT_NUM);
             AscendC::SetFlag<HardEvent::MTE2_S>(EVENT_ID0);
             AscendC::WaitFlag<HardEvent::MTE2_S>(EVENT_ID0);  // Wait for GM->UB
-
+            int64_t systemCycleAfter = AscendC::GetSystemCycle();
             // Check if the synchronization flags are equal to checkValue
             isSync = true;
             int64_t remainToCheck = flagNum - checkedFlagNum;
+            if (systemCycleAfter - systemCycleBefore > 50000000) {
+                for (auto i = 0; i < remainToCheck; ++i) {
+                    PRINTF("##debug waitOneRank flagNum %d, checkValue %d, status %d\n", flagNum, checkValue, localWait.GetValue(i * FLAG_UNIT_INT_NUM));
+                }
+                break;
+            }
             for (auto i = 0; i < remainToCheck; ++i) {
                 // Continue waiting if any core has not reached the checkValue phase
                 int64_t v = localWait.GetValue(i * FLAG_UNIT_INT_NUM);

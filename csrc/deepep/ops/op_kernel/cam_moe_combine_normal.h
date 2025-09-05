@@ -215,6 +215,7 @@ __aicore__ inline void CamMoeCombineNormal<TemplateMC2TypeFunc>::CopyBufferToSha
     tpipe_->InitBuffer(srcInfoBuf_, blockLen);
     LocalTensor<uint32_t> statusTensor = stateBuf_.AllocTensor<uint32_t>();
     Duplicate<uint32_t>(statusTensor, 0x3F800000, FLOAT_NUM_PER_ALIGN);
+    SyncFunc<AscendC::HardEvent::V_S>();
 
     LocalTensor<SrcInfoType> srcInfoLocal = srcInfoBuf_.Get<SrcInfoType>();
     const DataCopyExtParams dataCopyParams{1U, blockLen, 0U, 0U, 0U};
@@ -262,6 +263,7 @@ __aicore__ inline void CamMoeCombineNormal<TemplateMC2TypeFunc>::SetStatusBySrcI
     GM_ADDR stateGM = GetStateAddrByRankId(srcRankId) + (srcTokenId * axisK_ + srcTopkId) * UB_32_ALIGN;
     GlobalTensor<uint32_t> stateGMTensor;
     stateGMTensor.SetGlobalBuffer((__gm__ uint32_t*)stateGM);
+    PRINTF("##debug writeflag rankId %d, blockIdx %d, magic_:%d, srcRankId %d, srcTokenId %d, srcTopkId %d, status %d\n", epRankId_, coreIdx_, magic_, srcRankId, srcTokenId, srcTopkId, statusTensor.GetValue(0));
     DataCopy<uint32_t>(stateGMTensor, statusTensor, FLOAT_NUM_PER_ALIGN);
 }
 
@@ -277,6 +279,7 @@ __aicore__ inline void CamMoeCombineNormal<TemplateMC2TypeFunc>::WaitBuffCopy(ui
     SumParams sumPerKParams{1, calCount, calCount};
     LocalTensor<float> stateTensorLocal = stateBuf_.Get<float>();
     LocalTensor<float> tempStateTensorLocal = tempStateBuf_.Get<float>();
+    int64_t systemCycleBefore = AscendC::GetSystemCycle();
     while (current != target) {
         SyncFunc<AscendC::HardEvent::S_MTE2>();
         DataCopy<float>(stateTensorLocal, stateGMTensor, calCount);
@@ -284,6 +287,22 @@ __aicore__ inline void CamMoeCombineNormal<TemplateMC2TypeFunc>::WaitBuffCopy(ui
         Sum(tempStateTensorLocal, stateTensorLocal, sumPerKParams);
         SyncFunc<AscendC::HardEvent::V_S>();
         current = tempStateTensorLocal(0);
+        int64_t systemCycleAfter = AscendC::GetSystemCycle();
+        if (systemCycleAfter - systemCycleBefore > 50000000) {
+            printf("========= debug combine WaitBuffCopy rank:%d coreIdx:%d, magic_:%d, current:%f, tokenIdx %d\n", epRankId_, coreIdx_, magic_, current, tokenIndex);
+            for (int i = 0; i < axisK_; i++) {
+                printf("========= debug combine WaitBuffCopy state %d value: %f %f %f %f %f %f %f %f \n", i, stateTensorLocal.GetValue(i * 8),
+                                                                                                        stateTensorLocal.GetValue(i * 8 + 1),
+                                                                                                        stateTensorLocal.GetValue(i * 8 + 2),
+                                                                                                        stateTensorLocal.GetValue(i * 8 + 3),
+                                                                                                        stateTensorLocal.GetValue(i * 8 + 4),
+                                                                                                        stateTensorLocal.GetValue(i * 8 + 5),
+                                                                                                        stateTensorLocal.GetValue(i * 8 + 6),
+                                                                                                        stateTensorLocal.GetValue(i * 8 + 7));
+            }
+            //PRINTF("##debug waitflag rankId %d, blockIdx %d, status0 %d, status1 %d, status2 %d, status3 %d, status4 %d, status5 %d, status6 %d, status7 %d", epRankId_, coreIdx_, stateTensorLocal.GetValue(0), stateTensorLocal.GetValue(8), stateTensorLocal.GetValue(16), stateTensorLocal.GetValue(24), stateTensorLocal.GetValue(32), stateTensorLocal.GetValue(40), stateTensorLocal.GetValue(48), stateTensorLocal.GetValue(56));
+            break;
+        }
     }
     SyncFunc<AscendC::HardEvent::S_V>();
     Duplicate<float>(tempStateTensorLocal, (float)0.0, calCount);

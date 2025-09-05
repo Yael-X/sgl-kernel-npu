@@ -235,6 +235,9 @@ class Buffer:
         if handle is not None:
             raise NotImplementedError("Optional communication handle is not supported yet.")
         else:
+            cur_rank = dist.get_rank()
+            print(f"======[dispatch in] rank:{cur_rank}, x:{x.shape}")
+
             assert num_tokens_per_rank is not None and is_token_in_rank is not None and num_tokens_per_expert is not None
             recv_x, recv_x_scales, recv_topk_idx, recv_topk_weights, num_recv_tokens_per_expert_list, rank_prefix_matrix, channel_prefix_matrix, recv_channel_prefix_matrix, recv_src_idx, send_head, event = \
                 self.runtime.intranode_dispatch(x, x_scales, topk_idx, topk_weights,
@@ -242,6 +245,9 @@ class Buffer:
                                                 expert_alignment, num_worst_tokens, config,
                                                 getattr(previous_event, 'event', None), async_finish, allocate_on_comm_stream)
             handle = (rank_prefix_matrix, channel_prefix_matrix, recv_channel_prefix_matrix, recv_src_idx, is_token_in_rank, send_head, topk_idx, topk_weights)
+
+            print(f"\n======[dispatch out] rank:{cur_rank}, recv_x:{recv_x.shape}, topk_idx:{topk_idx}, num_recv_tokens_per_expert_list:{num_recv_tokens_per_expert_list}, "
+                f"recv_src_idx:{recv_src_idx}, send_head:{send_head}")
             return (recv_x, recv_x_scales) if x_scales is not None else recv_x, recv_topk_idx, recv_topk_weights, num_recv_tokens_per_expert_list, handle, EventOverlap(event)
 
         # noinspection PyTypeChecker
@@ -276,8 +282,13 @@ class Buffer:
         # NOTES: the second `_` is for the sending side, so we should use the third one
         rank_prefix_matrix, _, channel_prefix_matrix, src_idx, is_recv_token_in_rank, send_head, topk_idx, topk_weights_ori = handle
 
+        cur_rank = dist.get_rank()
+        print(f"\n======[combine in] rank:{cur_rank}, x:{x.shape}, topk_idx:{topk_idx}, "
+                f"src_idx:{src_idx}, send_head:{send_head}")
+
         # Launch the kernel
         recv_x, recv_topk_weights, event = self.runtime.intranode_combine(x, topk_idx, topk_weights_ori, src_idx, send_head)
+        print(f"\n======[combine out] rank:{cur_rank}, recv_x:{recv_x.shape}")
         return recv_x, recv_topk_weights, EventOverlap(event)
 
     # noinspection PyTypeChecker

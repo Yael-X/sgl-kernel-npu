@@ -81,6 +81,7 @@ def bench(fn, num_warmups: int = 50, num_tests: int = 50, post_fn=None):
             post_fn()
 
         torch.npu.synchronize()
+        # dist.barrier()
         elapsed_time = start.elapsed_time(end) / 1e3  # ms -> s
         times.append(elapsed_time)
 
