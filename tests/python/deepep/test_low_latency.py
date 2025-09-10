@@ -20,6 +20,7 @@ def test(
     num_ranks: int,
     group: dist.ProcessGroup,
     buffer: Buffer,
+    args: argparse.Namespace,
     seed: int = 0,
 ):
     torch.manual_seed(seed + rank)
@@ -38,11 +39,79 @@ def test(
         rank - rank_offset
     )
     x[:, -128:] = torch.arange(num_tokens, device="npu").to(torch.bfloat16).view(-1, 1)
-    scores = (
-        torch.randn((num_tokens, num_experts), dtype=torch.float32, device="npu").abs()
-        + 1
-    )
-    topk_idx = torch.topk(scores, num_topk, dim=-1, largest=True, sorted=True)[1]
+    # Generate routing (topk_idx)
+    if args.active_ranks:
+        try:
+            active_ranks = [
+                int(r.strip()) for r in args.active_ranks.split(",") if r.strip()
+            ]
+        except ValueError:
+            raise ValueError(
+                f"Invalid value in --active-ranks: {args.active_ranks}. "
+                f"Must be a comma-separated list of integers, e.g., '0,1,3'."
+            )
+
+        if any(r < 0 or r >= num_ranks for r in active_ranks):
+            raise ValueError(
+                f"Invalid rank in --active-ranks: {active_ranks}. "
+                f"Ranks must be in range [0, {num_ranks - 1}]."
+            )
+
+        if not active_ranks:
+            raise ValueError(
+                "Parsed --active-ranks is empty. Provide at least one valid rank."
+            )
+
+        experts_per_rank = num_experts // num_ranks
+        valid_experts = torch.cat(
+            [
+                torch.arange(
+                    r * experts_per_rank, (r + 1) * experts_per_rank, device="npu"
+                )
+                for r in active_ranks
+            ]
+        )
+        # Randomly sample experts from active ranks only
+        topk_idx = valid_experts[
+            torch.randint(0, len(valid_experts), (num_tokens, num_topk), device="npu")
+        ]
+        if rank == 0:
+            print(
+                f"[config] active_ranks={active_ranks}, valid_experts={len(valid_experts)}",
+                flush=True,
+            )
+    else:
+        scores = (
+            torch.randn(
+                (num_tokens, num_experts), dtype=torch.float32, device="npu"
+            ).abs()
+            + 1
+        )
+    #     topk_idx = torch.topk(scores, num_topk, dim=-1, largest=True, sorted=True)[1]
+
+    # # 模拟部分 -1，但保证至少一个合法 expert
+    # if args.drop_prob > 0:
+    #     # 随机掩码，决定哪些元素置为 -1
+    #     drop_mask = torch.rand_like(topk_idx, dtype=torch.float32) < args.drop_prob
+    #     topk_idx = topk_idx.masked_fill(drop_mask, -1)
+
+    #     # 确保每行至少有一个非 -1
+    #     for i in range(num_tokens):
+    #         if (topk_idx[i] == -1).all():
+    #             # 保留第一个位置不 drop
+    #             topk_idx[i, 0] = torch.topk(scores[i], 1, largest=True)[1].item()
+
+    topk_idx = torch.tensor([
+        [0,  1,  2,  3,  -1, -1, -1, -1],
+        [4,  5,  6,  -1, -1, -1, -1, -1],
+        [7,  8,  9, 10, 11, -1, -1, -1],
+        [12, 13, -1, -1, -1, -1, -1, -1],
+        [14, 15, 16, 17, 18, 19, 20, 21],
+        [22, -1, -1, -1, -1, -1, -1, -1],
+        [23, 24, 25, 26, -1, -1, -1, -1],
+        [27, 28, 29, 30, 31, -1, -1, -1],
+    ], dtype=torch.int64, device="npu")
+
     topk_weights = torch.randn(
         (num_tokens, num_topk), dtype=torch.float32, device="npu"
     ).abs()
@@ -124,7 +193,9 @@ def test(
         assert torch.isnan(combined_x).sum().item() == 0
         assert diff < 1e-5, f"Error: {diff=}, {zero_copy=}"
         hash_value ^= hash_tensor(combined_x)
+        print(f"[rank {rank}] Check pass", flush=True)
 
+    # return hash_value
     # noinspection PyShadowingNames
     def test_func(zero_copy: bool, return_recv_hook: bool):
         recv_x, recv_count, handle, event, hook = buffer.low_latency_dispatch(
@@ -165,34 +236,34 @@ def test(
     )
 
     # Separate profiling
-    dispatch_args = {
-        "x": x,
-        "topk_idx": topk_idx,
-        "num_max_dispatch_tokens_per_rank": num_tokens,
-        "num_experts": num_experts,
-        "cumulative_local_expert_recv_stats": cumulative_local_expert_recv_stats,
-        "use_fp8": False,
-        "async_finish": False,
-        "return_recv_hook": return_recv_hook,
-    }
+    # dispatch_args = {
+    #     "x": x,
+    #     "topk_idx": topk_idx,
+    #     "num_max_dispatch_tokens_per_rank": num_tokens,
+    #     "num_experts": num_experts,
+    #     "cumulative_local_expert_recv_stats": cumulative_local_expert_recv_stats,
+    #     "use_fp8": False,
+    #     "async_finish": False,
+    #     "return_recv_hook": return_recv_hook,
+    # }
 
-    dispatch_t = bench(lambda: buffer.low_latency_dispatch(**dispatch_args))[0]
-    temp_recv_x, _, temp_handle, _, _ = buffer.low_latency_dispatch(**dispatch_args)
-    combine_args = {
-        "x": temp_recv_x,
-        "topk_idx": topk_idx,
-        "topk_weights": topk_weights,
-        "handle": temp_handle,
-        "zero_copy": False,
-        "async_finish": False,
-        "return_recv_hook": return_recv_hook,
-    }
-    combine_t = bench(lambda: buffer.low_latency_combine(**combine_args))[0]
-    print(
-        f"[rank {rank}] Dispatch bandwidth: {(num_dispatch_comm_bytes) / 1e9 / dispatch_t:.2f} GB/s, avg_t={dispatch_t * 1e6:.2f} us | "
-        f"Combine bandwidth: {(num_combine_comm_bytes) / 1e9 / combine_t:.2f} GB/s, avg_t={combine_t * 1e6:.2f} us",
-        flush=True,
-    )
+    # dispatch_t = bench(lambda: buffer.low_latency_dispatch(**dispatch_args))[0]
+    # temp_recv_x, _, temp_handle, _, _ = buffer.low_latency_dispatch(**dispatch_args)
+    # combine_args = {
+    #     "x": temp_recv_x,
+    #     "topk_idx": topk_idx,
+    #     "topk_weights": topk_weights,
+    #     "handle": temp_handle,
+    #     "zero_copy": False,
+    #     "async_finish": False,
+    #     "return_recv_hook": return_recv_hook,
+    # }
+    # combine_t = bench(lambda: buffer.low_latency_combine(**combine_args))[0]
+    # print(
+    #     f"[rank {rank}] Dispatch bandwidth: {(num_dispatch_comm_bytes) / 1e9 / dispatch_t:.2f} GB/s, avg_t={dispatch_t * 1e6:.2f} us | "
+    #     f"Combine bandwidth: {(num_combine_comm_bytes) / 1e9 / combine_t:.2f} GB/s, avg_t={combine_t * 1e6:.2f} us",
+    #     flush=True,
+    # )
 
     return hash_value
 
@@ -223,9 +294,11 @@ def test_loop(local_rank: int, num_local_ranks: int, args: argparse.Namespace):
         use_ranks,
         group,
         buffer,
+        args,
         seed=1,
     )
 
+    # return
     do_pressure_test = False
     for seed in range(int(1e9) if do_pressure_test else 0):
         if rank == 0:
@@ -239,6 +312,7 @@ def test_loop(local_rank: int, num_local_ranks: int, args: argparse.Namespace):
             use_ranks,
             group,
             buffer,
+            args,
             seed=seed,
         )
         for i in range(20):
@@ -252,6 +326,7 @@ def test_loop(local_rank: int, num_local_ranks: int, args: argparse.Namespace):
                     use_ranks,
                     group,
                     buffer,
+                    args,
                     seed=seed,
                 )
                 == ref_hash
@@ -269,7 +344,7 @@ if __name__ == "__main__":
         help="Number of processes to spawn (default: 16)",
     )
     parser.add_argument(
-        "--num-tokens", type=int, default=256, help="Number of tokens (default: 256)"
+        "--num-tokens", type=int, default=8, help="Number of tokens (default: 256)"
     )
     parser.add_argument(
         "--hidden", type=int, default=7168, help="Hidden dimension size (default: 7168)"
@@ -279,6 +354,20 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--num-experts", type=int, default=256, help="Number of experts (default: 256)"
+    )
+    parser.add_argument(
+        "--active-ranks",
+        type=str,
+        default="",
+        help="Comma-separated list of ranks that will receive tokens. "
+        'Example: "0,1,3". If empty, all ranks may receive tokens.',
+    )
+    parser.add_argument(
+        "--drop-prob",
+        type=float,
+        default=0.0,
+        help="Probability of dropping an individual top-k index (set to -1). "
+            "Guaranteed that each token keeps at least one valid expert."
     )
     args = parser.parse_args()
 

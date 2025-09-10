@@ -594,6 +594,9 @@ __aicore__ inline void MoeDistributeDispatchV2<TemplateMC2TypeFunc>::SendToMoeEx
         int32_t curExpertCnt = 0;
         topKIndex = expertIdx % axisK_;
         dstExpertId = expertIdsTensor_(expertIdx);
+        if (dstExpertId == static_cast<uint32_t>(-1)) {
+            continue;
+        }
         if ((tokenIndex > 0) && (index > 0)) {
             CalTokenSendExpertCnt(dstExpertId, index, curExpertCnt);
         }
