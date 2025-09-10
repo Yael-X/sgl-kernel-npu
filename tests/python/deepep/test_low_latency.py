@@ -87,30 +87,20 @@ def test(
             ).abs()
             + 1
         )
-    #     topk_idx = torch.topk(scores, num_topk, dim=-1, largest=True, sorted=True)[1]
+        topk_idx = torch.topk(scores, num_topk, dim=-1, largest=True, sorted=True)[1]
 
-    # # 模拟部分 -1，但保证至少一个合法 expert
-    # if args.drop_prob > 0:
-    #     # 随机掩码，决定哪些元素置为 -1
-    #     drop_mask = torch.rand_like(topk_idx, dtype=torch.float32) < args.drop_prob
-    #     topk_idx = topk_idx.masked_fill(drop_mask, -1)
+    # 模拟部分 -1，但保证至少一个合法 expert
+    if args.drop_prob > 0:
+        # 随机掩码，决定哪些元素置为 -1
+        drop_mask = torch.rand_like(topk_idx, dtype=torch.float32) < args.drop_prob
+        topk_idx = topk_idx.masked_fill(drop_mask, -1)
 
-    #     # 确保每行至少有一个非 -1
-    #     for i in range(num_tokens):
-    #         if (topk_idx[i] == -1).all():
-    #             # 保留第一个位置不 drop
-    #             topk_idx[i, 0] = torch.topk(scores[i], 1, largest=True)[1].item()
+        # 确保每行至少有一个非 -1
+        for i in range(num_tokens):
+            if (topk_idx[i] == -1).all():
+                # 保留第一个位置不 drop
+                topk_idx[i, 0] = torch.topk(scores[i], 1, largest=True)[1].item()
 
-    topk_idx = torch.tensor([
-        [0,  1,  2,  3,  -1, -1, -1, -1],
-        [4,  5,  6,  -1, -1, -1, -1, -1],
-        [7,  8,  9, 10, 11, -1, -1, -1],
-        [12, 13, -1, -1, -1, -1, -1, -1],
-        [14, 15, 16, 17, 18, 19, 20, 21],
-        [22, -1, -1, -1, -1, -1, -1, -1],
-        [23, 24, 25, 26, -1, -1, -1, -1],
-        [27, 28, 29, 30, 31, -1, -1, -1],
-    ], dtype=torch.int64, device="npu")
 
     topk_weights = torch.randn(
         (num_tokens, num_topk), dtype=torch.float32, device="npu"
@@ -344,7 +334,7 @@ if __name__ == "__main__":
         help="Number of processes to spawn (default: 16)",
     )
     parser.add_argument(
-        "--num-tokens", type=int, default=8, help="Number of tokens (default: 256)"
+        "--num-tokens", type=int, default=256, help="Number of tokens (default: 256)"
     )
     parser.add_argument(
         "--hidden", type=int, default=7168, help="Hidden dimension size (default: 7168)"
