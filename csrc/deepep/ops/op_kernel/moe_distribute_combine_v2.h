@@ -648,13 +648,6 @@ __aicore__ inline void MoeDistributeCombineV2<TemplateMC2TypeFunc>::ExpertAlltoA
         GlobalTensor<float> stateGMTensor;
         stateGMTensor.SetGlobalBuffer((__gm__ float*)stateGM);
         DataCopy<float>(stateGMTensor, statusTensor, FLOAT_PER_UB_ALIGN);
-
-        // ===== Debug Log =====
-        if (coreIdx_ == 0) {
-            PRINTF("[DispatchSetStatus] epRankId=%u coreIdx=%u -> toRankId=%u tokenId=%u topkId=%u tkIndex=%u stateGM=%p val=%.1f\n",
-                   epRankId_, coreIdx_, toRankId, tokenId, topkId, tkIndex,
-                   stateGM, statusTensor(0));
-        }
     }
 }
 
@@ -764,17 +757,6 @@ __aicore__ inline void MoeDistributeCombineV2<TemplateMC2TypeFunc>::CalcInvalidP
     PipeBarrier<PIPE_V>();
     SyncFunc<AscendC::HardEvent::MTE2_V>();
     SyncFunc<AscendC::HardEvent::MTE2_S>();
-    // if (coreIdx_ == 0) {
-    //     PRINTF("\n===[combine] rank:%d, coreIdx_:%d, expertIdsTensor_:%d %d %d %d %d %d %d %d \n", epRankId_, coreIdx_,
-    //         expertIdsTensor_.GetValue(0),
-    //         expertIdsTensor_.GetValue(1),
-    //         expertIdsTensor_.GetValue(2),
-    //         expertIdsTensor_.GetValue(3),
-    //         expertIdsTensor_.GetValue(4),
-    //         expertIdsTensor_.GetValue(5),
-    //         expertIdsTensor_.GetValue(6),
-    //         expertIdsTensor_.GetValue(7));
-    // }
 
     // Step1: 构造常量 -1 tensor，与 expertIdsTensor_ 同 shape
     LocalTensor<int32_t> negOneTensor = negOneTensorBuf_.Get<int32_t>();  // shape = [axisBS_ * axisK_]
@@ -782,17 +764,6 @@ __aicore__ inline void MoeDistributeCombineV2<TemplateMC2TypeFunc>::CalcInvalidP
     PipeBarrier<PIPE_V>();
     SyncFunc<AscendC::HardEvent::MTE2_V>();
     SyncFunc<AscendC::HardEvent::MTE2_S>();
-    // if (coreIdx_ == 0) {
-    //     PRINTF("\n===[combine] rank:%d, coreIdx_:%d, negOneTensor:%d %d %d %d %d %d %d %d \n", epRankId_, coreIdx_,
-    //         negOneTensor.GetValue(0),
-    //         negOneTensor.GetValue(1),
-    //         negOneTensor.GetValue(2),
-    //         negOneTensor.GetValue(3),
-    //         negOneTensor.GetValue(4),
-    //         negOneTensor.GetValue(5),
-    //         negOneTensor.GetValue(6),
-    //         negOneTensor.GetValue(7));
-    // }
 
     // Step2: 比较 expertIdsTensor_ == -1，得到0/1 tensor
     LocalTensor<uint8_t> cmpTensor = expertIdsCmpTensorBuf_.Get<uint8_t>();    // shape = [axisBS_ * axisK_]
@@ -802,23 +773,9 @@ __aicore__ inline void MoeDistributeCombineV2<TemplateMC2TypeFunc>::CalcInvalidP
     SyncFunc<AscendC::HardEvent::V_S>();
     SyncFunc<AscendC::HardEvent::MTE2_S>();
     PipeBarrier<PIPE_V>();
-    // if (coreIdx_ == 0) {
-    //     PRINTF("\n===[combine] rank:%d, coreIdx_:%d, cmpTensor:%u(0x%x) %u(0x%x) %u(0x%x) %u(0x%x) %u(0x%x) %u(0x%x) %u(0x%x) %u(0x%x) \n", epRankId_, coreIdx_,
-    //         static_cast<uint8_t>(cmpTensor.GetValue(0)), static_cast<uint8_t>(cmpTensor.GetValue(0)),
-    //         static_cast<uint8_t>(cmpTensor.GetValue(1)), static_cast<uint8_t>(cmpTensor.GetValue(1)),
-    //         static_cast<uint8_t>(cmpTensor.GetValue(2)), static_cast<uint8_t>(cmpTensor.GetValue(2)),
-    //         static_cast<uint8_t>(cmpTensor.GetValue(3)), static_cast<uint8_t>(cmpTensor.GetValue(3)),
-    //         static_cast<uint8_t>(cmpTensor.GetValue(4)), static_cast<uint8_t>(cmpTensor.GetValue(4)),
-    //         static_cast<uint8_t>(cmpTensor.GetValue(5)), static_cast<uint8_t>(cmpTensor.GetValue(5)),
-    //         static_cast<uint8_t>(cmpTensor.GetValue(6)), static_cast<uint8_t>(cmpTensor.GetValue(6)),
-    //         static_cast<uint8_t>(cmpTensor.GetValue(7)), static_cast<uint8_t>(cmpTensor.GetValue(7)));
-    // }
 
-    // LocalTensor<half> cmpHalf = expertIdsCmpHalfBuf_.Get<half>(); // shape = [axisBS_ * axisK_]
     LocalTensor<float> cmpFloat = expertIdsCmpFloatBuf_.Get<float>(); // shape = [axisBS_ * axisK_]
-    // Cast: int32 -> float。RoundMode::CAST_NONE 表示直接转换数值
-    // Cast(cmpHalf, cmpTensor, RoundMode::CAST_NONE, bsKNum_);
-    // Cast(cmpFloat, cmpHalf, RoundMode::CAST_NONE, bsKNum_);
+
     for (int i = 0; i < bsKNum_; ++i) {
         // 找到对应的byte和bit位置
         int byteIdx = i / 8;
@@ -831,49 +788,18 @@ __aicore__ inline void MoeDistributeCombineV2<TemplateMC2TypeFunc>::CalcInvalidP
     PipeBarrier<PIPE_V>();
     SyncFunc<AscendC::HardEvent::V_S>();
     SyncFunc<AscendC::HardEvent::MTE2_S>();
-    // if (coreIdx_ == 0) {
-    //     PRINTF("\n===[combine] rank:%d, coreIdx_:%d, cmpFloat:%f %f %f %f %f %f %f %f \n", epRankId_, coreIdx_,
-    //         cmpFloat.GetValue(0),
-    //         cmpFloat.GetValue(1),
-    //         cmpFloat.GetValue(2),
-    //         cmpFloat.GetValue(3),
-    //         cmpFloat.GetValue(4),
-    //         cmpFloat.GetValue(5),
-    //         cmpFloat.GetValue(6),
-    //         cmpFloat.GetValue(7));
-    // }
-    // Step3: 按 axisK_ 维度做 reduce sum，得到每行 -1 个数
+
     uint32_t shape[] = { axisBS_, axisK_ };
     LocalTensor<float> topkInvalidCntFloat = topkInvalidCntFloatBuf_.Get<float>();
     ReduceSum<float, AscendC::Pattern::Reduce::AR, true>(topkInvalidCntFloat, cmpFloat, workLocalBuf_.Get<uint8_t>(), shape, true);
     SyncFunc<AscendC::HardEvent::V_S>();
     SyncFunc<AscendC::HardEvent::MTE2_S>();
-    // if (coreIdx_ == 0) {
-    //     PRINTF("\n===[combine] rank:%d, coreIdx_:%d, topkInvalidCntFloat:%f %f %f %f %f %f %f %f \n", epRankId_, coreIdx_,
-    //         topkInvalidCntFloat.GetValue(0),
-    //         topkInvalidCntFloat.GetValue(1),
-    //         topkInvalidCntFloat.GetValue(2),
-    //         topkInvalidCntFloat.GetValue(3),
-    //         topkInvalidCntFloat.GetValue(4),
-    //         topkInvalidCntFloat.GetValue(5),
-    //         topkInvalidCntFloat.GetValue(6),
-    //         topkInvalidCntFloat.GetValue(7));
-    // }
+
     Cast(topkInvalidCntTensor_, topkInvalidCntFloat, RoundMode::CAST_FLOOR, axisBS_);
     PipeBarrier<PIPE_V>();
     SyncFunc<AscendC::HardEvent::MTE2_S>();
-    // if (coreIdx_ == 0) {
-    //     PRINTF("\n===[combine] rank:%d, coreIdx_:%d, topkInvalidCntTensor_:%d %d %d %d %d %d %d %d \n", epRankId_, coreIdx_,
-    //         topkInvalidCntTensor_.GetValue(0),
-    //         topkInvalidCntTensor_.GetValue(1),
-    //         topkInvalidCntTensor_.GetValue(2),
-    //         topkInvalidCntTensor_.GetValue(3),
-    //         topkInvalidCntTensor_.GetValue(4),
-    //         topkInvalidCntTensor_.GetValue(5),
-    //         topkInvalidCntTensor_.GetValue(6),
-    //         topkInvalidCntTensor_.GetValue(7));
-    // }
 }
+
 template <TemplateMC2TypeClass>
 __aicore__ inline void MoeDistributeCombineV2<TemplateMC2TypeFunc>::WaitDispatch(uint32_t tokenIndex)
 {
@@ -897,11 +823,6 @@ __aicore__ inline void MoeDistributeCombineV2<TemplateMC2TypeFunc>::WaitDispatch
     SumParams sumParams{1, copyCount, copyCount};
     LocalTensor<float> stateTensor = stateBuf_.Get<float>();
 
-    // Debug control：采样输出间隔与超时阈值（可调）
-    constexpr int LOG_INTERVAL = 102400;        // 每多少次打印一次（压测下改大）
-    constexpr int MAX_ITER = 1 << 20;         // 到达后打印详细快照并 break（避免无限挂起）
-    int iter = 0;
-
     while ((localState < minTarget) || (localState > maxTarget)) {
         // 小心：MTE2 sync / DataCopy
         SyncFunc<AscendC::HardEvent::S_MTE2>();
@@ -912,28 +833,6 @@ __aicore__ inline void MoeDistributeCombineV2<TemplateMC2TypeFunc>::WaitDispatch
         Sum(stateTensor, stateTensor, sumParams);
         SyncFunc<AscendC::HardEvent::V_S>();
         localState = stateTensor(0);
-
-        // 限量日志：每 LOG_INTERVAL 次打印一次基本信息（只由 coreIdx_==0 打印）
-        if ((iter % LOG_INTERVAL) == 0 && coreIdx_ == 0) {
-            PRINTF("[WaitDispatch] rank:%d core:%d token:%u iter:%d localState:%f target:%f copyCount:%u flagRcvCount:%d topkInvalid:%d \n",
-                   epRankId_, coreIdx_, tokenIndex, iter, localState, target, copyCount, flagRcvCount_, topkInvalidCntTensor_.GetValue(tokenIndex));
-        }
-
-        if (iter >= MAX_ITER) {
-            if (coreIdx_ == 0) {
-                PRINTF("[WaitDispatch:TIMEOUT] rank:%d core:%d token:%u iter:%d localState:%f target:%f copyCount:%u flagRcvCount:%d topkInvalid:%d -> dumping head of stateTensor \n",
-                       epRankId_, coreIdx_, tokenIndex, iter, localState, target, copyCount, flagRcvCount_, topkInvalidCntTensor_.GetValue(tokenIndex));
-
-                // 打印 stateTensor 的前若干个元素（避免过多日志）
-                int dumpN = (copyCount < 32) ? copyCount : 32;
-                for (int i = 0; i < dumpN; ++i) {
-                    PRINTF(" state[%d]=%f", i, stateTensor.GetValue(i));
-                }
-                PRINTF("\\n");
-            }
-        }
-
-        ++iter;
     }
 
     // 若正常退出循环或超时退出，清零并写回 GM
@@ -1006,9 +905,6 @@ __aicore__ inline void MoeDistributeCombineV2<TemplateMC2TypeFunc>::LocalWindowC
         uint32_t tokenIndex = curIdx;
         if (isInputExpertMaskFlag_) {
             tokenIndex = vaildBsIndexTensor_.GetValue(curIdx);
-        }
-        if (coreIdx_ == 0) {
-            PRINTF("[Before WaitDispatch] rank:%d core:%d curIdx:%u tokenIndex:%u \n", epRankId_, coreIdx_, curIdx, tokenIndex );
         }
         WaitDispatch(tokenIndex);
         uint32_t index = tokenIndex * axisK_;
@@ -1087,10 +983,7 @@ __aicore__ inline void MoeDistributeCombineV2<TemplateMC2TypeFunc>::Process()
         if constexpr (IsNeedReduceScatter) {
             ReduceScatterTrans();
         }
-        if (coreIdx_ == 0) {
-            PRINTF("[Combine enter] epRankId=%u coreIdx=%u ==================================\n",
-                   epRankId_, coreIdx_);
-        }
+
         BuffInit();
         SetWaitTpStatusAndDisPatch();
         AlltoAllBuffInitAndMaskCal();
