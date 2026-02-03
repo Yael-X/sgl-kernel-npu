@@ -15,8 +15,8 @@
 namespace deep_ep {
 
 struct Buffer {
-    int64_t rank, rdma_rank, nvl_rank;
-    int64_t num_ranks, num_rdma_ranks, num_nvl_ranks;
+    int32_t rank, rdma_rank, nvl_rank;
+    int32_t num_ranks, num_rdma_ranks, num_nvl_ranks;
     op::SocVersion soc_version;
 
     int64_t num_nvl_bytes;
@@ -36,8 +36,8 @@ struct Buffer {
     at::Tensor send_token_idx_small;
     int notify_send_data_size;  // only for internode notify
 
-    int64_t shared_expert_rank_num;
-    int64_t shared_expert_num = 1;
+    int32_t shared_expert_rank_num;
+    int32_t shared_expert_num = 1;
     int64_t real_max_bs;
 
 private:

@@ -909,7 +909,7 @@ std::tuple<at::Tensor, std::optional<at::Tensor>, at::Tensor, at::Tensor, at::Te
            std::optional<std::function<void()>>>
 Buffer::low_latency_dispatch(const at::Tensor &x, const at::Tensor &topk_idx,
                              const std::optional<at::Tensor> &cumulative_local_expert_recv_stats,
-                             int64_t num_max_dispatch_tokens_per_rank, int64_t num_experts, bool use_fp8,
+                             int num_max_dispatch_tokens_per_rank, int num_experts, bool use_fp8,
                              bool round_scale, bool use_ue8m0, bool async, bool return_recv_hook)
 {
     this->is_padding = false;
@@ -949,7 +949,7 @@ Buffer::low_latency_dispatch(const at::Tensor &x, const at::Tensor &topk_idx,
         num_max_tokens = global_bs / shared_expert_rank_num;
         num_local_experts = 1;
     } else {  // moe expert
-        num_max_tokens = global_bs * num_local_experts;
+        num_max_tokens = global_bs * std::min(num_topk, num_local_experts);
     }
     auto max_size = std::max(num_tokens * num_topk, num_max_tokens * 128);
 
